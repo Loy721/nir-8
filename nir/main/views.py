@@ -15,7 +15,7 @@ history_temp_for_n_steps = np.array(
 
 
 def get_actual_temps():
-    access_key = '91ca306c-da4b-4005-9bf0-e0e5b86bcf81'
+    access_key = '5ae88ab3-9162-4b83-a324-5a43890af3dc' # TODO: ключ действует 7 дней
 
     headers = {
         "X-Yandex-API-Key": access_key
