@@ -1,21 +1,18 @@
-import numpy as np
 from django.http import HttpResponse
 import tensorflow as tf
 from apscheduler.schedulers.background import BackgroundScheduler
 import requests
 import json
-from datetime import datetime
-
-# Create your views here.
+import pandas as pd
 
 history_prediction = []
-model = tf.keras.models.load_model("C:\\Users\\dynka\\IdeaProjects\\Python\\NIR2\\mlp_model")
-history_temp_for_n_steps = np.array(
-    [12, 10, 10, 12, 10, 10, 12, 10, 9, 8, 7, 11, 15, 18, 17])  # TODO: перед деплоем вставить акутальные данные
-
+model = tf.keras.models.load_model("C:\\Users\\dynka\\Downloads\\model.h5")
+history_temp_for_n_steps = pd.read_excel('C:\\Users\\dynka\\django\\nir\\nir\\main\\SE_final.xls', skiprows=6)
+history_temp_for_n_steps = history_temp_for_n_steps[4:2924]
+history_temp_for_n_steps = history_temp_for_n_steps['T'].values[::-1]
 
 def get_actual_temps():
-    access_key = '5ae88ab3-9162-4b83-a324-5a43890af3dc' # TODO: ключ действует 7 дней
+    access_key = 'some-key' # TODO: ключ действует 7 дней
 
     headers = {
         "X-Yandex-API-Key": access_key
@@ -32,26 +29,22 @@ def get_actual_temps():
     now_temperature = response.json()["data"]["weatherByPoint"]["now"]["temperature"]
     return now_temperature
 
+def __normalize(data):
+    return ((data + 30.6) / (39.7 + 30.6)) * 2 - 1
 
+
+def denormalize(normalized_data):
+    return ((normalized_data + 1) / 2) * (39.7 + 30.6) - 30.6
 def predict():
-    now_temperature = get_actual_temps()
-    history_temp_for_n_steps[:15 - 1] = history_temp_for_n_steps[1:15]
-    history_temp_for_n_steps[15 - 1] = now_temperature
-
-    ls = []
-    dat = history_temp_for_n_steps.copy()
-    for i in range(0, 7):
-        ls.append(model.predict(dat.reshape(1, 15), verbose=0)[0])
-        dat[:15 - 1] = dat[1:15]
-        dat[15 - 1] = ls[i]
-    history_prediction.append(ls)
-
+    tmp = __normalize(history_temp_for_n_steps.reshape(1, 1, 1, 2920, 1))
+    history_prediction.append(denormalize(model.predict(tmp)))
+    print(history_prediction)
 
 def index(request):
     data = []
-    current_hour = datetime.now().hour
-    for i in range(7):
-        temperature = str(round(history_prediction[len(history_prediction) - 1][i][0])) # берем последний предикт
+    current_hour = 0
+    for i in range(8):
+        temperature = str(round(history_prediction[0][0][i])) # берем последний предикт
         hour = str((current_hour + 1 + i * 3) % 24).zfill(2) # +1 так как по дефолту московское время
         data.append({"time": hour + ':00', "temperature": temperature + '°C'})
     json_data = json.dumps(data)
@@ -59,6 +52,6 @@ def index(request):
 
 
 sched = BackgroundScheduler(daemon=True)
-sched.add_job(predict, 'interval', hours=3, start_date='2024-04-16 23:00:00')  # TODO: hours=3
+sched.add_job(predict, 'interval', hours=3, start_date='2024-05-22 00:00:00')  # TODO: hours=3
 sched.start()
 predict() # вызываем для начальной инициализации
